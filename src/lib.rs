@@ -4,9 +4,8 @@ use bytemuck::{
     Pod, Zeroable, allocation::zeroed_box, bytes_of, bytes_of_mut, must_cast_slice,
     must_cast_slice_mut, zeroed_vec,
 };
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-use serde_big_array::BigArray;
 
 use std::{
     io::{self, Read, Write},
@@ -26,7 +25,8 @@ const DATA_SIZE: usize = assert_size::<CritData>(7404);
 const DATA_EXT_SIZE: usize = assert_size::<CritDataExt>(6944);
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Bool(u8);
 
 impl From<bool> for Bool {
@@ -40,8 +40,32 @@ impl From<Bool> for bool {
     }
 }
 
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, bytemuck::TransparentWrapper, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
+pub struct BigArray<T, const LEN: usize>(
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            with = "serde_big_array::BigArray",
+            bound(
+                serialize = "T: Serialize",
+                deserialize = "T: serde::de::DeserializeOwned"
+            )
+        )
+    )]
+    pub [T; LEN],
+);
+
+impl<T: Zeroable, const LEN: usize> Default for BigArray<T, LEN> {
+    fn default() -> Self {
+        Self(Zeroable::zeroed())
+    }
+}
+
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NpcBagItem {
     pub ItemPid: u32,
     pub MinCnt: u32,
@@ -49,7 +73,8 @@ pub struct NpcBagItem {
     pub ItemSlot: u32,
 }
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CritData {
     pub Id: u32,
     pub HexX: u16,
@@ -74,8 +99,7 @@ pub struct CritData {
     pub MapId: u32,
     pub MapPid: u16,
     pub Reserved2: u16,
-    #[serde(with = "BigArray")]
-    pub Params: [i32; 1000],
+    pub Params: BigArray<i32, 1000>,
     pub Anim1Life: u32,
     pub Anim1Knockout: u32,
     pub Anim1Dead: u32,
@@ -84,8 +108,7 @@ pub struct CritData {
     pub Anim2Dead: u32,
     pub Anim2KnockoutEnd: u32,
     pub Reserved3: [u32; 3],
-    #[serde(with = "BigArray")]
-    pub Lexems: [i8; 128],
+    pub Lexems: BigArray<i8, 128>,
     pub Reserved4: [u32; 8],
     pub ClientToDelete: Bool,
     pub Reserved5: u8,
@@ -93,13 +116,10 @@ pub struct CritData {
     pub Temp: u32,
     pub Reserved8: u16,
     pub HoloInfoCount: u16,
-    #[serde(with = "BigArray")]
-    pub HoloInfo: [u32; 250],
+    pub HoloInfo: BigArray<u32, 250>,
     pub Reserved9: [u32; 10],
-    #[serde(with = "BigArray")]
-    pub Scores: [i32; 50],
-    #[serde(with = "BigArray")]
-    pub UserData: [u8; 400],
+    pub Scores: BigArray<i32, 50>,
+    pub UserData: BigArray<u8, 400>,
     pub HomeMap: u32,
     pub HomeX: u16,
     pub HomeY: u16,
@@ -123,30 +143,27 @@ pub struct CritData {
     pub BagRefreshTime: i16,
     pub Reserved21: u8,
     pub BagSize: u8,
-    #[serde(with = "BigArray")]
-    pub Bag: [NpcBagItem; 50],
-    #[serde(with = "BigArray")]
-    pub Reserved22: [u32; 100],
+    pub Bag: BigArray<NpcBagItem, 50>,
+    pub Reserved22: BigArray<u32, 100>,
 }
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CritDataExt {
     pub Reserved23: [u32; 10],
-    #[serde(with = "BigArray")]
-    pub GlobalMapFog: [u8; 2500],
+    pub GlobalMapFog: BigArray<u8, 2500>,
     pub Reserved24: u16,
     pub LocationsCount: u16,
-    #[serde(with = "BigArray")]
-    pub LocationsId: [u32; 1000],
-    #[serde(with = "BigArray")]
-    pub Reserved25: [u32; 40],
+    pub LocationsId: BigArray<u32, 1000>,
+    pub Reserved25: BigArray<u32, 40>,
     pub PlayIp: [u32; 20],
     pub PlayPort: [u16; 20],
     pub CurrentIp: u32,
     pub Reserved26: [u32; 29],
 }
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CrTimeEvent {
     pub FuncNum: u32,
     pub Rate: u32,
@@ -155,7 +172,8 @@ pub struct CrTimeEvent {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ClientSaveData {
     pub signature: [u8; 4],
     //pub Name: [i16; 31usize],
@@ -243,11 +261,5 @@ mod test {
 
         let vec2 = client.write();
         assert_eq!(vec, vec2);
-    }
-
-    #[test]
-    fn sizeof() {
-        assert_eq!(size_of::<CritData>(), DATA_SIZE);
-        assert_eq!(size_of::<CritDataExt>(), DATA_EXT_SIZE);
     }
 }

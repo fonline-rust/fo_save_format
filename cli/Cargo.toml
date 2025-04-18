@@ -8,4 +8,4 @@ edition = "2018"
 serde.workspace = true
 serde_json.workspace = true
 ron.workspace = true
-fo_save_format = { path = "../" }
+fo_save_format = { path = "../", features = ["serde"] }

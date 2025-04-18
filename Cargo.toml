@@ -4,10 +4,13 @@ version = "0.2.0"
 authors = ["qthree <qthree3@gmail.com>"]
 edition = "2024"
 
+[features]
+serde = ["dep:serde", "dep:serde-big-array"]
+
 [dependencies]
 bytemuck.workspace = true
-serde.workspace = true
-serde-big-array.workspace = true
+serde = { workspace = true, optional = true }
+serde-big-array = { workspace = true, optional = true }
 
 [dev-dependencies]
 ron.workspace = true
