@@ -18,7 +18,7 @@ fn main() -> std::io::Result<()> {
     match ext {
         Some(ext) if ext == "client" => {
             let mut file = std::fs::File::open(&path)?;
-            let client = ClientSaveData::read_unsafe(&mut file)?;
+            let client = ClientSaveData::read(&mut file)?;
 
             let pretty = PrettyConfig::default()
                 .depth_limit(3)

@@ -5,9 +5,25 @@ use bytemuck::{
     must_cast_slice_mut, zeroed_vec,
 };
 use serde::{Deserialize, Serialize};
-use serdebug::SerDebug;
 
 use serde_big_array::BigArray;
+
+use std::{
+    io::{self, Read, Write},
+    mem::size_of,
+};
+
+const fn assert_size<T>(size: usize) -> usize {
+    let expected = size_of::<T>();
+    if expected != size {
+        panic!("unexpected size");
+    }
+    size
+}
+
+const SIGNATURE: [u8; 4] = [70, 79, 0, 2];
+const DATA_SIZE: usize = assert_size::<CritData>(7404);
+const DATA_EXT_SIZE: usize = assert_size::<CritDataExt>(6944);
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Pod, Zeroable)]
@@ -33,7 +49,7 @@ pub struct NpcBagItem {
     pub ItemSlot: u32,
 }
 #[repr(C)]
-#[derive(SerDebug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
 pub struct CritData {
     pub Id: u32,
     pub HexX: u16,
@@ -113,7 +129,7 @@ pub struct CritData {
     pub Reserved22: [u32; 100],
 }
 #[repr(C)]
-#[derive(SerDebug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
 pub struct CritDataExt {
     pub Reserved23: [u32; 10],
     #[serde(with = "BigArray")]
@@ -155,109 +171,12 @@ impl ClientSaveData {
     }
 }
 
-use std::{
-    io::{self, Read, Write},
-    mem::size_of,
-};
-
-const SIGNATURE: [u8; 4] = [70, 79, 0, 2];
-const DATA_SIZE: usize = 7404;
-const DATA_EXT_SIZE: usize = 6944;
-
 fn invalid_data<T>() -> io::Result<T> {
     Err(std::io::ErrorKind::InvalidData.into())
 }
 
 impl ClientSaveData {
-    pub fn read_unsafe<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
-        let mut signature = [0u8; 4];
-        reader.read_exact(&mut signature[..])?;
-        if signature != SIGNATURE {
-            invalid_data()?;
-        }
-        let mut password_hash = [0u8; 32];
-        reader.read_exact(&mut password_hash[..])?;
-
-        let mut data = vec![0u8; size_of::<CritData>()];
-        reader.read_exact(&mut data[..])?;
-
-        let mut data_ext = vec![0u8; size_of::<CritDataExt>()];
-        reader.read_exact(&mut data_ext[..])?;
-
-        let mut te_count = [0u8; size_of::<u32>()];
-        reader.read_exact(&mut te_count[..])?;
-        let te_count = u32::from_le_bytes(te_count) as usize;
-        if te_count > 0xFFFF {
-            invalid_data()?;
-        }
-        let mut time_events = Vec::with_capacity(te_count);
-        let mut time_event_buffer = [0u8; size_of::<CrTimeEvent>()];
-        for _ in 0..te_count {
-            reader.read_exact(&mut time_event_buffer[..])?;
-            let time_event =
-                unsafe { std::mem::transmute::<[u8; 16], CrTimeEvent>(time_event_buffer) };
-            time_events.push(time_event);
-        }
-        if reader.bytes().next().is_some() {
-            invalid_data()?;
-        }
-        let data = unsafe { transmute_from_vec(data) }?;
-        let data_ext = unsafe { transmute_from_vec(data_ext) }?;
-        Ok(ClientSaveData {
-            signature,
-            password_hash,
-            data,
-            data_ext,
-            time_events,
-        })
-    }
-
-    pub fn read_bincode<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
-        let mut signature = [0u8; 4];
-        reader.read_exact(&mut signature[..])?;
-        if signature != SIGNATURE {
-            invalid_data()?;
-        }
-        let mut password_hash = [0u8; 32];
-        reader.read_exact(&mut password_hash[..])?;
-
-        let mut data = [0u8; size_of::<CritData>()];
-        reader.read_exact(&mut data[..])?;
-        let data = bincode::deserialize_from(&mut &data[..])
-            .map_err(|_| std::io::ErrorKind::InvalidData)?;
-
-        let mut data_ext = [0u8; size_of::<CritDataExt>()];
-        reader.read_exact(&mut data_ext[..])?;
-        let data_ext = bincode::deserialize_from(&mut &data_ext[..])
-            .map_err(|_| std::io::ErrorKind::InvalidData)?;
-
-        let mut te_count = [0u8; size_of::<u32>()];
-        reader.read_exact(&mut te_count[..])?;
-        let te_count = u32::from_le_bytes(te_count) as usize;
-        if te_count > 0xFFFF {
-            invalid_data()?;
-        }
-        let mut time_events = Vec::with_capacity(te_count);
-        let mut time_event_buffer = [0u8; size_of::<CrTimeEvent>()];
-        for _ in 0..te_count {
-            reader.read_exact(&mut time_event_buffer[..])?;
-            let time_event = bincode::deserialize_from(&mut &time_event_buffer[..])
-                .map_err(|_| std::io::ErrorKind::InvalidData)?;
-            time_events.push(time_event);
-        }
-        if reader.bytes().next().is_some() {
-            invalid_data()?;
-        }
-        Ok(ClientSaveData {
-            signature,
-            password_hash,
-            data,
-            data_ext,
-            time_events,
-        })
-    }
-
-    pub fn read_bytemuck<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
         let mut signature = [0u8; 4];
         reader.read_exact(&mut signature[..])?;
         if signature != SIGNATURE {
@@ -302,29 +221,6 @@ impl ClientSaveData {
         let mut vec = Vec::with_capacity(full_size);
         vec.write_all(&self.signature[..]).unwrap();
         vec.write_all(&self.password_hash[..]).unwrap();
-        bincode::serialize_into(&mut vec, &self.data).unwrap();
-        //assert_eq!(data.len(), 7404);
-        bincode::serialize_into(&mut vec, &self.data_ext).unwrap();
-        //assert_eq!(data_ext.len(), 6944);
-        vec.write_all(&self.time_events_count().to_le_bytes()[..])
-            .unwrap();
-        for event in &self.time_events {
-            bincode::serialize_into(&mut vec, &event).unwrap();
-        }
-        assert_eq!(vec.len(), full_size);
-        vec
-    }
-
-    pub fn write_bytemuck(&self) -> Vec<u8> {
-        let full_size = 4
-            + 32
-            + DATA_SIZE
-            + DATA_EXT_SIZE
-            + 4
-            + self.time_events.len() * size_of::<CrTimeEvent>();
-        let mut vec = Vec::with_capacity(full_size);
-        vec.write_all(&self.signature[..]).unwrap();
-        vec.write_all(&self.password_hash[..]).unwrap();
         vec.write_all(bytes_of(&*self.data)).unwrap();
         vec.write_all(bytes_of(&*self.data_ext)).unwrap();
         vec.write_all(bytes_of(&self.time_events_count())).unwrap();
@@ -334,71 +230,19 @@ impl ClientSaveData {
     }
 }
 
-unsafe fn transmute_from_vec<T>(data: Vec<u8>) -> io::Result<Box<T>> {
-    unsafe {
-        if data.len() != size_of::<T>() {
-            invalid_data()?;
-        }
-        let mut boxed_slice = data.into_boxed_slice();
-        let ptr: *mut T = std::mem::transmute(boxed_slice.as_mut_ptr());
-        std::mem::forget(boxed_slice);
-        Ok(Box::from_raw(ptr))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn read_unsafe_write_hybrid() {
+    fn read_write_hybrid() {
         let vec = std::fs::read("../FO4RP/save/clients/qthree.client").unwrap();
         let mut slice = &vec[..];
-        let client = ClientSaveData::read_unsafe(&mut slice).unwrap();
+        let client = ClientSaveData::read(&mut slice).unwrap();
         eprintln!("{client:?}");
 
         let vec2 = client.write();
         assert_eq!(vec, vec2);
-        /*
-        for i in 0..vec.len().max(vec3.len()) {
-            match (vec.get(i), vec3.get(i)) {
-                (Some(a), Some(b)) if a==b => {},
-                (a, b) => {
-                    println!("{}# Original: {:?}, Bincode: {:?}", i, a, b);
-                }
-            }
-        }*/
-    }
-
-    #[test]
-    fn read_unsafe_read_bincode() {
-        let vec = std::fs::read("../FO4RP/save/clients/qthree.client").unwrap();
-        let mut slice = &vec[..];
-        let client = ClientSaveData::read_unsafe(&mut slice).unwrap();
-        let mut slice = &vec[..];
-        let client2 = ClientSaveData::read_bincode(&mut slice).unwrap();
-        let mut slice = &vec[..];
-        let client3 = ClientSaveData::read_bytemuck(&mut slice).unwrap();
-
-        let json1 = serde_json::to_string(&client).unwrap();
-        let json2 = serde_json::to_string(&client2).unwrap();
-        let json3 = serde_json::to_string(&client3).unwrap();
-        assert_eq!(json1, json2);
-        assert_eq!(json2, json3);
-
-        let vec1 = client.write();
-        let vec2 = client2.write();
-        let vec3 = client3.write();
-        assert_eq!(vec, vec1);
-        assert_eq!(vec, vec2);
-        assert_eq!(vec, vec3);
-
-        let vec1bm = client.write_bytemuck();
-        let vec2bm = client2.write_bytemuck();
-        let vec3bm = client3.write_bytemuck();
-        assert_eq!(vec, vec1bm);
-        assert_eq!(vec, vec2bm);
-        assert_eq!(vec, vec3bm);
     }
 
     #[test]
