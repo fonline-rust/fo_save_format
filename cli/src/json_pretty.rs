@@ -20,24 +20,21 @@ impl<'a> PrettyFormatter<'a> {
         PrettyFormatter {
             current_indent: 0,
             has_value: false,
-            indent: indent,
+            indent,
             inside_array: false,
         }
     }
 }
 
-impl<'a> Default for PrettyFormatter<'a> {
+impl Default for PrettyFormatter<'_> {
     fn default() -> Self {
         PrettyFormatter::new()
     }
 }
 
-impl<'a> Formatter for PrettyFormatter<'a> {
+impl Formatter for PrettyFormatter<'_> {
     #[inline]
-    fn begin_array<W: ?Sized>(&mut self, writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn begin_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
         //self.current_indent += 1;
         self.has_value = false;
         self.inside_array = true;
@@ -45,10 +42,7 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn end_array<W: ?Sized>(&mut self, writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn end_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
         //self.current_indent -= 1;
 
         //if self.has_value {
@@ -61,10 +55,11 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn begin_array_value<W: ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn begin_array_value<W: ?Sized + io::Write>(
+        &mut self,
+        writer: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         if first {
             //try!(writer.write_all(b"\n"));
         } else {
@@ -76,19 +71,13 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn end_array_value<W: ?Sized>(&mut self, _writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn end_array_value<W: ?Sized + io::Write>(&mut self, _writer: &mut W) -> io::Result<()> {
         self.has_value = true;
         Ok(())
     }
 
     #[inline]
-    fn begin_object<W: ?Sized>(&mut self, writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn begin_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
         if !self.inside_array {
             self.current_indent += 1;
         }
@@ -97,10 +86,7 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn end_object<W: ?Sized>(&mut self, writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn end_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
         if !self.inside_array {
             self.current_indent -= 1;
 
@@ -114,10 +100,11 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn begin_object_key<W: ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn begin_object_key<W: ?Sized + io::Write>(
+        &mut self,
+        writer: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         if !self.inside_array {
             if first {
                 writer.write_all(b"\n")?;
@@ -133,27 +120,18 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn begin_object_value<W: ?Sized>(&mut self, writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn begin_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
         writer.write_all(b": ")
     }
 
     #[inline]
-    fn end_object_value<W: ?Sized>(&mut self, _writer: &mut W) -> io::Result<()>
-    where
-        W: io::Write,
-    {
+    fn end_object_value<W: ?Sized + io::Write>(&mut self, _writer: &mut W) -> io::Result<()> {
         self.has_value = true;
         Ok(())
     }
 }
 
-fn indent<W: ?Sized>(wr: &mut W, n: usize, s: &[u8]) -> io::Result<()>
-where
-    W: io::Write,
-{
+fn indent<W: ?Sized + io::Write>(wr: &mut W, n: usize, s: &[u8]) -> io::Result<()> {
     for _ in 0..n {
         wr.write_all(s)?;
     }

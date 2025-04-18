@@ -176,7 +176,8 @@ impl ClientSaveData {
         let mut time_event_buffer = [0u8; size_of::<CrTimeEvent>()];
         for _ in 0..te_count {
             reader.read_exact(&mut time_event_buffer[..])?;
-            let time_event = unsafe { std::mem::transmute(time_event_buffer) };
+            let time_event =
+                unsafe { std::mem::transmute::<[u8; 16], CrTimeEvent>(time_event_buffer) };
             time_events.push(time_event);
         }
         if reader.bytes().next().is_some() {
@@ -263,13 +264,15 @@ impl ClientSaveData {
 }
 
 unsafe fn transmute_from_vec<T>(data: Vec<u8>) -> io::Result<Box<T>> {
-    if data.len() != size_of::<T>() {
-        invalid_data()?;
+    unsafe {
+        if data.len() != size_of::<T>() {
+            invalid_data()?;
+        }
+        let mut boxed_slice = data.into_boxed_slice();
+        let ptr: *mut T = std::mem::transmute(boxed_slice.as_mut_ptr());
+        std::mem::forget(boxed_slice);
+        Ok(Box::from_raw(ptr))
     }
-    let mut boxed_slice = data.into_boxed_slice();
-    let ptr: *mut T = std::mem::transmute(boxed_slice.as_mut_ptr());
-    std::mem::forget(boxed_slice);
-    Ok(Box::from_raw(ptr))
 }
 
 #[cfg(test)]
