@@ -1,70 +1,82 @@
 #![allow(non_snake_case)]
 
+use bytemuck::{
+    Pod, Zeroable, allocation::zeroed_box, bytes_of, bytes_of_mut, must_cast_slice,
+    must_cast_slice_mut, zeroed_vec,
+};
 use serde::{Deserialize, Serialize};
 use serdebug::SerDebug;
-
-#[allow(non_camel_case_types)]
-pub type uchar = ::std::os::raw::c_uchar;
-#[allow(non_camel_case_types)]
-pub type ushort = ::std::os::raw::c_ushort;
-#[allow(non_camel_case_types)]
-pub type uint = ::std::os::raw::c_uint;
 
 use serde_big_array::BigArray;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Pod, Zeroable)]
+pub struct Bool(u8);
+
+impl From<bool> for Bool {
+    fn from(value: bool) -> Self {
+        Self(if value { 1 } else { 0 })
+    }
+}
+impl From<Bool> for bool {
+    fn from(value: Bool) -> Self {
+        value.0 != 0
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Pod, Zeroable)]
 pub struct NpcBagItem {
-    pub ItemPid: uint,
-    pub MinCnt: uint,
-    pub MaxCnt: uint,
-    pub ItemSlot: uint,
+    pub ItemPid: u32,
+    pub MinCnt: u32,
+    pub MaxCnt: u32,
+    pub ItemSlot: u32,
 }
 #[repr(C)]
-#[derive(SerDebug, Clone, Serialize, Deserialize)]
+#[derive(SerDebug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
 pub struct CritData {
-    pub Id: uint,
-    pub HexX: ushort,
-    pub HexY: ushort,
-    pub WorldX: ushort,
-    pub WorldY: ushort,
-    pub BaseType: uint,
-    pub Dir: uchar,
-    pub Cond: uchar,
-    pub ReservedCE: uchar,
-    pub Reserved0: ::std::os::raw::c_char,
-    pub ScriptId: uint,
-    pub ShowCritterDist1: uint,
-    pub ShowCritterDist2: uint,
-    pub ShowCritterDist3: uint,
-    pub Reserved00: ushort,
-    pub Multihex: ::std::os::raw::c_short,
-    pub GlobalGroupUid: uint,
-    pub LastHexX: ushort,
-    pub LastHexY: ushort,
+    pub Id: u32,
+    pub HexX: u16,
+    pub HexY: u16,
+    pub WorldX: u16,
+    pub WorldY: u16,
+    pub BaseType: u32,
+    pub Dir: u8,
+    pub Cond: u8,
+    pub ReservedCE: u8,
+    pub Reserved0: i8,
+    pub ScriptId: u32,
+    pub ShowCritterDist1: u32,
+    pub ShowCritterDist2: u32,
+    pub ShowCritterDist3: u32,
+    pub Reserved00: u16,
+    pub Multihex: i16,
+    pub GlobalGroupUid: u32,
+    pub LastHexX: u16,
+    pub LastHexY: u16,
     pub Reserved1: [u32; 4],
-    pub MapId: uint,
-    pub MapPid: ushort,
-    pub Reserved2: ushort,
+    pub MapId: u32,
+    pub MapPid: u16,
+    pub Reserved2: u16,
     #[serde(with = "BigArray")]
     pub Params: [i32; 1000],
-    pub Anim1Life: uint,
-    pub Anim1Knockout: uint,
-    pub Anim1Dead: uint,
-    pub Anim2Life: uint,
-    pub Anim2Knockout: uint,
-    pub Anim2Dead: uint,
-    pub Anim2KnockoutEnd: uint,
+    pub Anim1Life: u32,
+    pub Anim1Knockout: u32,
+    pub Anim1Dead: u32,
+    pub Anim2Life: u32,
+    pub Anim2Knockout: u32,
+    pub Anim2Dead: u32,
+    pub Anim2KnockoutEnd: u32,
     pub Reserved3: [u32; 3],
     #[serde(with = "BigArray")]
     pub Lexems: [i8; 128],
     pub Reserved4: [u32; 8],
-    pub ClientToDelete: bool,
-    pub Reserved5: uchar,
-    pub Reserved6: ushort,
-    pub Temp: uint,
-    pub Reserved8: ushort,
-    pub HoloInfoCount: ushort,
+    pub ClientToDelete: Bool,
+    pub Reserved5: u8,
+    pub Reserved6: u16,
+    pub Temp: u32,
+    pub Reserved8: u16,
+    pub HoloInfoCount: u16,
     #[serde(with = "BigArray")]
     pub HoloInfo: [u32; 250],
     pub Reserved9: [u32; 10],
@@ -72,69 +84,75 @@ pub struct CritData {
     pub Scores: [i32; 50],
     #[serde(with = "BigArray")]
     pub UserData: [u8; 400],
-    pub HomeMap: uint,
-    pub HomeX: ushort,
-    pub HomeY: ushort,
-    pub HomeOri: uchar,
-    pub Reserved11: uchar,
-    pub ProtoId: ushort,
-    pub Reserved12: uint,
-    pub Reserved13: uint,
-    pub Reserved14: uint,
-    pub Reserved15: uint,
-    pub IsDataExt: bool,
-    pub Reserved16: uchar,
-    pub Reserved17: ushort,
+    pub HomeMap: u32,
+    pub HomeX: u16,
+    pub HomeY: u16,
+    pub HomeOri: u8,
+    pub Reserved11: u8,
+    pub ProtoId: u16,
+    pub Reserved12: u32,
+    pub Reserved13: u32,
+    pub Reserved14: u32,
+    pub Reserved15: u32,
+    pub IsDataExt: Bool,
+    pub Reserved16: u8,
+    pub Reserved17: u16,
     pub Reserved18: [u32; 8],
-    pub FavoriteItemPid: [ushort; 4],
+    pub FavoriteItemPid: [u16; 4],
     pub Reserved19: [u32; 10],
-    pub EnemyStackCount: uint,
+    pub EnemyStackCount: u32,
     pub EnemyStack: [u32; 30],
     pub Reserved20: [u32; 5],
     pub BagCurrentSet: [u8; 20],
-    pub BagRefreshTime: ::std::os::raw::c_short,
-    pub Reserved21: uchar,
-    pub BagSize: uchar,
+    pub BagRefreshTime: i16,
+    pub Reserved21: u8,
+    pub BagSize: u8,
     #[serde(with = "BigArray")]
     pub Bag: [NpcBagItem; 50],
     #[serde(with = "BigArray")]
     pub Reserved22: [u32; 100],
 }
 #[repr(C)]
-#[derive(SerDebug, Clone, Serialize, Deserialize)]
+#[derive(SerDebug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
 pub struct CritDataExt {
     pub Reserved23: [u32; 10],
     #[serde(with = "BigArray")]
     pub GlobalMapFog: [u8; 2500],
-    pub Reserved24: ushort,
-    pub LocationsCount: ushort,
+    pub Reserved24: u16,
+    pub LocationsCount: u16,
     #[serde(with = "BigArray")]
     pub LocationsId: [u32; 1000],
     #[serde(with = "BigArray")]
     pub Reserved25: [u32; 40],
     pub PlayIp: [u32; 20],
-    pub PlayPort: [ushort; 20],
-    pub CurrentIp: uint,
+    pub PlayPort: [u16; 20],
+    pub CurrentIp: u32,
     pub Reserved26: [u32; 29],
 }
 #[repr(C)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Pod, Zeroable)]
 pub struct CrTimeEvent {
-    pub FuncNum: uint,
-    pub Rate: uint,
-    pub NextTime: uint,
-    pub Identifier: ::std::os::raw::c_int,
+    pub FuncNum: u32,
+    pub Rate: u32,
+    pub NextTime: u32,
+    pub Identifier: i32,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientSaveData {
     pub signature: [u8; 4],
-    //pub Name: [::std::os::raw::c_char; 31usize],
+    //pub Name: [i16; 31usize],
     pub password_hash: [u8; 32],
     pub data: Box<CritData>,
     pub data_ext: Box<CritDataExt>,
     pub time_events: Vec<CrTimeEvent>,
+}
+
+impl ClientSaveData {
+    fn time_events_count(&self) -> u32 {
+        self.time_events.len() as u32
+    }
 }
 
 use std::{
@@ -168,7 +186,7 @@ impl ClientSaveData {
 
         let mut te_count = [0u8; size_of::<u32>()];
         reader.read_exact(&mut te_count[..])?;
-        let te_count = u32::from_ne_bytes(te_count) as usize;
+        let te_count = u32::from_le_bytes(te_count) as usize;
         if te_count > 0xFFFF {
             invalid_data()?;
         }
@@ -215,7 +233,7 @@ impl ClientSaveData {
 
         let mut te_count = [0u8; size_of::<u32>()];
         reader.read_exact(&mut te_count[..])?;
-        let te_count = u32::from_ne_bytes(te_count) as usize;
+        let te_count = u32::from_le_bytes(te_count) as usize;
         if te_count > 0xFFFF {
             invalid_data()?;
         }
@@ -227,6 +245,41 @@ impl ClientSaveData {
                 .map_err(|_| std::io::ErrorKind::InvalidData)?;
             time_events.push(time_event);
         }
+        if reader.bytes().next().is_some() {
+            invalid_data()?;
+        }
+        Ok(ClientSaveData {
+            signature,
+            password_hash,
+            data,
+            data_ext,
+            time_events,
+        })
+    }
+
+    pub fn read_bytemuck<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
+        let mut signature = [0u8; 4];
+        reader.read_exact(&mut signature[..])?;
+        if signature != SIGNATURE {
+            invalid_data()?;
+        }
+        let mut password_hash = [0u8; 32];
+        reader.read_exact(&mut password_hash[..])?;
+
+        let mut data = zeroed_box::<CritData>();
+        reader.read_exact(bytes_of_mut(&mut *data))?;
+
+        let mut data_ext = zeroed_box::<CritDataExt>();
+        reader.read_exact(bytes_of_mut(&mut *data_ext))?;
+
+        let mut te_count = 0u32;
+        reader.read_exact(bytes_of_mut(&mut te_count))?;
+        if te_count > 0xFFFF {
+            invalid_data()?;
+        }
+        let mut time_events = zeroed_vec::<CrTimeEvent>(te_count as usize);
+        reader.read_exact(must_cast_slice_mut(time_events.as_mut_slice()))?;
+
         if reader.bytes().next().is_some() {
             invalid_data()?;
         }
@@ -253,11 +306,29 @@ impl ClientSaveData {
         //assert_eq!(data.len(), 7404);
         bincode::serialize_into(&mut vec, &self.data_ext).unwrap();
         //assert_eq!(data_ext.len(), 6944);
-        vec.write_all(&(self.time_events.len() as u32).to_ne_bytes()[..])
+        vec.write_all(&self.time_events_count().to_le_bytes()[..])
             .unwrap();
         for event in &self.time_events {
             bincode::serialize_into(&mut vec, &event).unwrap();
         }
+        assert_eq!(vec.len(), full_size);
+        vec
+    }
+
+    pub fn write_bytemuck(&self) -> Vec<u8> {
+        let full_size = 4
+            + 32
+            + DATA_SIZE
+            + DATA_EXT_SIZE
+            + 4
+            + self.time_events.len() * size_of::<CrTimeEvent>();
+        let mut vec = Vec::with_capacity(full_size);
+        vec.write_all(&self.signature[..]).unwrap();
+        vec.write_all(&self.password_hash[..]).unwrap();
+        vec.write_all(bytes_of(&*self.data)).unwrap();
+        vec.write_all(bytes_of(&*self.data_ext)).unwrap();
+        vec.write_all(bytes_of(&self.time_events_count())).unwrap();
+        vec.write_all(must_cast_slice(&self.time_events)).unwrap();
         assert_eq!(vec.len(), full_size);
         vec
     }
@@ -281,9 +352,10 @@ mod test {
 
     #[test]
     fn read_unsafe_write_hybrid() {
-        let vec = std::fs::read("test/qthree.client").unwrap();
+        let vec = std::fs::read("../FO4RP/save/clients/qthree.client").unwrap();
         let mut slice = &vec[..];
         let client = ClientSaveData::read_unsafe(&mut slice).unwrap();
+        eprintln!("{client:?}");
 
         let vec2 = client.write();
         assert_eq!(vec, vec2);
@@ -300,35 +372,37 @@ mod test {
 
     #[test]
     fn read_unsafe_read_bincode() {
-        let vec = std::fs::read("test/qthree.client").unwrap();
+        let vec = std::fs::read("../FO4RP/save/clients/qthree.client").unwrap();
         let mut slice = &vec[..];
         let client = ClientSaveData::read_unsafe(&mut slice).unwrap();
         let mut slice = &vec[..];
         let client2 = ClientSaveData::read_bincode(&mut slice).unwrap();
+        let mut slice = &vec[..];
+        let client3 = ClientSaveData::read_bytemuck(&mut slice).unwrap();
 
         let json1 = serde_json::to_string(&client).unwrap();
         let json2 = serde_json::to_string(&client2).unwrap();
+        let json3 = serde_json::to_string(&client3).unwrap();
         assert_eq!(json1, json2);
+        assert_eq!(json2, json3);
 
         let vec1 = client.write();
-        let vec2 = client.write();
+        let vec2 = client2.write();
+        let vec3 = client3.write();
         assert_eq!(vec, vec1);
         assert_eq!(vec, vec2);
-        /*
-        for i in 0..vec.len().max(vec3.len()) {
-            match (vec.get(i), vec3.get(i)) {
-                (Some(a), Some(b)) if a==b => {},
-                (a, b) => {
-                    println!("{}# Original: {:?}, Bincode: {:?}", i, a, b);
-                }
-            }
-        }*/
+        assert_eq!(vec, vec3);
+
+        let vec1bm = client.write_bytemuck();
+        let vec2bm = client2.write_bytemuck();
+        let vec3bm = client3.write_bytemuck();
+        assert_eq!(vec, vec1bm);
+        assert_eq!(vec, vec2bm);
+        assert_eq!(vec, vec3bm);
     }
 
     #[test]
     fn sizeof() {
-        assert_eq!(size_of::<::std::os::raw::c_char>(), size_of::<u8>());
-        assert_eq!(size_of::<uint>(), size_of::<u32>());
         assert_eq!(size_of::<CritData>(), DATA_SIZE);
         assert_eq!(size_of::<CritDataExt>(), DATA_EXT_SIZE);
     }
