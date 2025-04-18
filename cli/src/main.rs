@@ -1,4 +1,4 @@
-use fo_client_format::ClientSaveData;
+use fo_save_format::ClientSaveData;
 use ron::ser::{to_string_pretty, PrettyConfig};
 use std::path::{Path, PathBuf};
 
@@ -20,12 +20,10 @@ fn main() -> std::io::Result<()> {
             let mut file = std::fs::File::open(&path)?;
             let client = ClientSaveData::read_unsafe(&mut file)?;
 
-            let pretty = PrettyConfig {
-                depth_limit: 3,
-                separate_tuple_members: false,
-                enumerate_arrays: false,
-                ..PrettyConfig::default()
-            };
+            let pretty = PrettyConfig::default()
+                .depth_limit(3)
+                .separate_tuple_members(false)
+                .enumerate_arrays(false);
             let ron = to_string_pretty(&client, pretty).expect("Serialization failed");
             let mut new_path = PathBuf::new();
             new_path.set_file_name(file_name);

@@ -10,8 +10,7 @@ pub type ushort = ::std::os::raw::c_ushort;
 #[allow(non_camel_case_types)]
 pub type uint = ::std::os::raw::c_uint;
 
-use serde_big_array::big_array;
-big_array! { BigArray; 3, 4, 5, 8, 10, 20, 29, 30, 40, 50, 100, 128, 250, 400, 1000, 2500,}
+use serde_big_array::BigArray;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -247,13 +246,13 @@ impl ClientSaveData {
             + 4
             + self.time_events.len() * size_of::<CrTimeEvent>();
         let mut vec = Vec::with_capacity(full_size);
-        vec.write(&self.signature[..]).unwrap();
-        vec.write(&self.password_hash[..]).unwrap();
+        vec.write_all(&self.signature[..]).unwrap();
+        vec.write_all(&self.password_hash[..]).unwrap();
         bincode::serialize_into(&mut vec, &self.data).unwrap();
         //assert_eq!(data.len(), 7404);
         bincode::serialize_into(&mut vec, &self.data_ext).unwrap();
         //assert_eq!(data_ext.len(), 6944);
-        vec.write(&(self.time_events.len() as u32).to_ne_bytes()[..])
+        vec.write_all(&(self.time_events.len() as u32).to_ne_bytes()[..])
             .unwrap();
         for event in &self.time_events {
             bincode::serialize_into(&mut vec, &event).unwrap();
