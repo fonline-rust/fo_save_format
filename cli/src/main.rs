@@ -18,7 +18,7 @@ fn main() -> std::io::Result<()> {
     match ext {
         Some(ext) if ext == "client" => {
             let mut file = std::fs::File::open(&path)?;
-            let client = ClientSaveData::read(&mut file)?;
+            let client = ClientSaveData::sync_read(&mut file)?;
 
             let pretty = PrettyConfig::default()
                 .depth_limit(3)
@@ -48,7 +48,7 @@ fn main() -> std::io::Result<()> {
             let mut file = std::fs::File::open(&path)?;
             let client: ClientSaveData =
                 ron::de::from_reader(&mut file).expect("Can't parse file!");
-            let data = client.write();
+            let data = client.write_to_vec();
             let mut new_path = PathBuf::new();
             new_path.set_file_name(file_name);
             new_path.set_extension("client");
@@ -58,7 +58,7 @@ fn main() -> std::io::Result<()> {
             let mut file = std::fs::File::open(&path)?;
             let client: ClientSaveData =
                 serde_json::from_reader(&mut file).expect("Can't parse file!");
-            let data = client.write();
+            let data = client.write_to_vec();
             let mut new_path = PathBuf::new();
             new_path.set_file_name(file_name);
             new_path.set_extension("client");

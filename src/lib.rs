@@ -7,10 +7,7 @@ use bytemuck::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use std::{
-    io::{self, Read, Write},
-    mem::size_of,
-};
+use std::{io, mem::size_of};
 
 const fn assert_size<T>(size: usize) -> usize {
     let expected = size_of::<T>();
@@ -193,33 +190,41 @@ fn invalid_data<T>() -> io::Result<T> {
     Err(std::io::ErrorKind::InvalidData.into())
 }
 
+#[cfg(feature = "tokio")]
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+#[duplicate::duplicate_item(
+    async   await           _feature            _read           _Read;
+    []      [identity()]    [all()]             [sync_read]     [io::Read];
+    [async] [await]         [feature = "tokio"] [async_read]    [AsyncRead + Unpin];
+)]
 impl ClientSaveData {
-    pub fn read<R: Read>(reader: &mut R) -> io::Result<ClientSaveData> {
+    #[cfg(_feature)]
+    pub async fn _read<R: _Read>(reader: &mut R) -> io::Result<ClientSaveData> {
         let mut signature = [0u8; 4];
-        reader.read_exact(&mut signature[..])?;
+        reader.read_exact(&mut signature[..]).await?;
         if signature != SIGNATURE {
             invalid_data()?;
         }
         let mut password_hash = [0u8; 32];
-        reader.read_exact(&mut password_hash[..])?;
+        reader.read_exact(&mut password_hash[..]).await?;
 
         let mut data = zeroed_box::<CritData>();
-        reader.read_exact(bytes_of_mut(&mut *data))?;
+        reader.read_exact(bytes_of_mut(&mut *data)).await?;
 
         let mut data_ext = zeroed_box::<CritDataExt>();
-        reader.read_exact(bytes_of_mut(&mut *data_ext))?;
+        reader.read_exact(bytes_of_mut(&mut *data_ext)).await?;
 
         let mut te_count = 0u32;
-        reader.read_exact(bytes_of_mut(&mut te_count))?;
+        reader.read_exact(bytes_of_mut(&mut te_count)).await?;
         if te_count > 0xFFFF {
             invalid_data()?;
         }
         let mut time_events = zeroed_vec::<CrTimeEvent>(te_count as usize);
-        reader.read_exact(must_cast_slice_mut(time_events.as_mut_slice()))?;
+        reader
+            .read_exact(must_cast_slice_mut(time_events.as_mut_slice()))
+            .await?;
 
-        if reader.bytes().next().is_some() {
-            invalid_data()?;
-        }
         Ok(ClientSaveData {
             signature,
             password_hash,
@@ -228,8 +233,30 @@ impl ClientSaveData {
             time_events,
         })
     }
+}
 
-    pub fn write(&self) -> Vec<u8> {
+#[duplicate::duplicate_item(
+    async   await           _feature            _write           _Write;
+    []      [identity()]    [all()]             [sync_write]     [io::Write];
+    [async] [await]         [feature = "tokio"] [async_write]    [AsyncWrite + Unpin];
+)]
+impl ClientSaveData {
+    #[cfg(_feature)]
+    pub async fn _write<W: _Write>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(&self.signature[..]).await?;
+        writer.write_all(&self.password_hash[..]).await?;
+        writer.write_all(bytes_of(&*self.data)).await?;
+        writer.write_all(bytes_of(&*self.data_ext)).await?;
+        writer
+            .write_all(bytes_of(&self.time_events_count()))
+            .await?;
+        writer.write_all(must_cast_slice(&self.time_events)).await?;
+        Ok(())
+    }
+}
+
+impl ClientSaveData {
+    pub fn write_to_vec(&self) -> Vec<u8> {
         let full_size = 4
             + 32
             + DATA_SIZE
@@ -237,14 +264,18 @@ impl ClientSaveData {
             + 4
             + self.time_events.len() * size_of::<CrTimeEvent>();
         let mut vec = Vec::with_capacity(full_size);
-        vec.write_all(&self.signature[..]).unwrap();
-        vec.write_all(&self.password_hash[..]).unwrap();
-        vec.write_all(bytes_of(&*self.data)).unwrap();
-        vec.write_all(bytes_of(&*self.data_ext)).unwrap();
-        vec.write_all(bytes_of(&self.time_events_count())).unwrap();
-        vec.write_all(must_cast_slice(&self.time_events)).unwrap();
+        self.sync_write(&mut vec).expect("write to Vec can't fail");
         assert_eq!(vec.len(), full_size);
         vec
+    }
+}
+
+trait Identity: Sized {
+    fn identity(self) -> Self;
+}
+impl<T> Identity for T {
+    fn identity(self) -> Self {
+        self
     }
 }
 
@@ -256,10 +287,11 @@ mod test {
     fn read_write_hybrid() {
         let vec = std::fs::read("../FO4RP/save/clients/qthree.client").unwrap();
         let mut slice = &vec[..];
-        let client = ClientSaveData::read(&mut slice).unwrap();
+        let client = ClientSaveData::sync_read(&mut slice).unwrap();
         eprintln!("{client:?}");
+        assert_eq!(slice.len(), 0);
 
-        let vec2 = client.write();
+        let vec2 = client.write_to_vec();
         assert_eq!(vec, vec2);
     }
 }
